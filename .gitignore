@@ -216,3 +216,6 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# training run artifacts (weights, plots, gifs)
+runs/
