@@ -89,7 +89,7 @@ class DDPMSimulator(Simulator):
     def from_args(cls, args, noise_scheduler: NoiseScheduler) -> "DDPMSimulator":
         return cls(diffusion_coefficient=args.diffusion_coef, noise_schedule=noise_scheduler)
 
-    @torch.no_grad
+    @torch.no_grad()
     def simulate(
             self,
             X0: Tensor,
@@ -98,7 +98,9 @@ class DDPMSimulator(Simulator):
         ) -> Tensor:
         Xt = X0.clone()
         t = torch.tensor([self.noise_schedule.beta_min]).expand(X0.size(0), X0.size(1), 1)
-        h = (self.noise_schedule.beta_max - self.noise_schedule.beta_min) / self.noise_schedule.T
+        # step t by 1/T so the schedule index walks one place per iteration, T-1 (most
+        # noise) down to 0 (data). This is the reverse-diffusion time step, not the beta step.
+        h = 1 / self.noise_schedule.T
         trajectory = [Xt.clone()]
 
         for _ in range(num_steps):
