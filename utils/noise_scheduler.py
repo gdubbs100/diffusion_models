@@ -4,17 +4,27 @@ from torch import Tensor
 
 class NoiseScheduler(ABC):
 
+    @classmethod
+    @abstractmethod
+    def from_args(cls, args) -> "NoiseScheduler":
+        """Build the scheduler, pulling whatever it needs out of the CLI args."""
+        ...
+
     @abstractmethod
     def __call__(
-            self, 
+            self,
             t: Tensor
         ) -> Tensor:
         ...
 
 class LinearNoiseScheduler(NoiseScheduler):
 
+    @classmethod
+    def from_args(cls, args) -> "LinearNoiseScheduler":
+        return cls()
+
     def __call__(
-            self, 
+            self,
             t: Tensor
         ) -> Tensor:
         return t, 1 - t
@@ -22,10 +32,15 @@ class LinearNoiseScheduler(NoiseScheduler):
 
 class DDPMNoiseScheduler(NoiseScheduler):
 
-    def __init__(self, beta: Tensor):
-        self.beta = beta
+    @classmethod
+    def from_args(cls, args) -> "DDPMNoiseScheduler":
+        return cls(beta_min=args.beta_min, beta_max=args.beta_max, T=args.T)
+
+    def __init__(self, beta_min: float, beta_max: float, T: int):
+        self.beta = torch.arange(start = beta_min, end = beta_max, step = (beta_max - beta_min)/T)
         self.alpha_bar = (1 - self.beta).cumprod(dim = 0)
-        self.T = beta.size(0) # indexed 0..T-1
+        self.T = T 
+        self.beta_min, self.beta_max = beta_min, beta_max
 
     def __call__(
             self,
@@ -47,6 +62,13 @@ class DDPMNoiseScheduler(NoiseScheduler):
         Inverse of t_to_index
         """
         return 1 - idx/self.T
+    
+    def calc_simulation_weights(self, t: Tensor) -> Tensor:
+        idx = self.t_to_index(t)
+        drift_weight = (1 / torch.sqrt(1 - self.beta[idx])).reshape_as(t)
+        noise_model_weight = (self.beta[idx] / (torch.sqrt(1 - self.alpha_bar[idx]))).reshape_as(t)
+        return drift_weight, noise_model_weight
+        
     
 
 

@@ -1,6 +1,6 @@
 import os
 ## this machine ships two OpenMP runtimes; let them coexist so torch can import
-os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
+# os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
 
 from datetime import datetime
 from pathlib import Path
@@ -13,14 +13,14 @@ from torch.optim import Adam
 
 from utils.cli import parse_args, MODEL_REGISTRY
 from utils.networks import Net
-from utils.noise_scheduler import LinearNoiseScheduler
 from utils.training_utils import DiffusionDataset, generate_circle_sample
-from utils.simulate import simulate
 from utils.viz import save_loss_plot, save_simulation_gif
 
 def main():
     args = parse_args()
     torch.manual_seed(args.seed)
+
+    ## setup model classes
     spec = MODEL_REGISTRY[args.model]
 
     ## data: a bunch of point clouds sampled from the unit circle
@@ -31,7 +31,7 @@ def main():
     model = Net(input_dim=2, output_dim=2)
     optimizer = Adam(params=model.parameters(), lr=args.lr)
     criterion = nn.MSELoss()
-    noise_schedule = LinearNoiseScheduler()
+    noise_schedule = spec.noise_scheduler.from_args(args=args)
 
     trainer = spec.trainer(
         model=model,
@@ -54,7 +54,8 @@ def main():
     ## sample one cloud from a Gaussian and watch it flow into the circle
     model.eval()
     X0 = dist.MultivariateNormal(torch.zeros(2), torch.eye(2)).sample((1, args.sim_particles))
-    trajectory = simulate(X0, model, spec.to_velocity, num_steps=args.sim_steps)
+    simulator = spec.simulator.from_args(args=args, noise_scheduler=noise_schedule)
+    trajectory = simulator.simulate(X0, model, num_steps=args.sim_steps)
     save_simulation_gif(trajectory.squeeze(1), str(run_dir / "simulation.gif"))  # drop the single-cloud batch dim
 
     print(f"Done. Wrote loss.png, model.pt and simulation.gif to {run_dir}")
