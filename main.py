@@ -1,7 +1,3 @@
-import os
-## this machine ships two OpenMP runtimes; let them coexist so torch can import
-# os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
-
 from datetime import datetime
 from pathlib import Path
 
